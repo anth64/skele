@@ -1,0 +1,16 @@
+*.d
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.so.*
+*.dylib
+*.exe
+*.out
+*.dSYM/
+*.su
+*.idb
+*.pdb
+obj/
+bin/
