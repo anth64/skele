@@ -6,8 +6,6 @@ uint64_t skele_tick_ns = 1000000000ULL / SKELE_DEFAULT_TICK_RATE;
 
 static uint8_t stk_initialized = 0;
 
-const char *skele_version(void) { return "0.0.0"; }
-
 void skele_set_tick_rate(uint8_t rate)
 {
 	skele_tick_ns = 1000000000ULL / (rate ? rate : SKELE_DEFAULT_TICK_RATE);
