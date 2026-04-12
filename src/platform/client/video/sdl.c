@@ -168,14 +168,12 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 
 	SDL_SetTexturePalette(texture, sdl_pal);
 
-	{
-		SDL_Color black[SKELE_PALETTE_COLORS];
-		uint16_t i;
-		memset(black, 0, sizeof(black));
-		for (i = 0; i < SKELE_PALETTE_COLORS; i++)
-			black[i].a = 255;
-		SDL_SetPaletteColors(sdl_pal, black, 0, SKELE_PALETTE_COLORS);
-	}
+	SDL_Color black[SKELE_PALETTE_COLORS];
+	uint16_t i;
+	memset(black, 0, sizeof(black));
+	for (i = 0; i < SKELE_PALETTE_COLORS; i++)
+		black[i].a = 255;
+	SDL_SetPaletteColors(sdl_pal, black, 0, SKELE_PALETTE_COLORS);
 
 	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
 	SDL_SetRenderVSync(renderer, 1);
