@@ -5,7 +5,6 @@
 #include "skele.h"
 #include <stdlib.h>
 #include <stk/stk.h>
-#include <string.h>
 
 static uint8_t running = 1;
 
@@ -14,12 +13,8 @@ static void on_signal(void) { running = 0; }
 int main(int argc, char *argv[])
 {
 	skele_video_config_t video_cfg;
-	uint64_t last, now, elapsed;
+	uint64_t last, now, elapsed, accum = 0;
 	uint8_t *pixels;
-	uint32_t total;
-
-	(void)argc;
-	(void)argv;
 
 	skele_clock_init(on_signal);
 
@@ -43,8 +38,8 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	total = (uint32_t)(video_cfg.render_width * video_cfg.render_height);
-	pixels = malloc(total);
+	pixels = calloc(video_cfg.render_width * video_cfg.render_height,
+			sizeof(uint8_t));
 	if (!pixels) {
 		skele_video_shutdown();
 		skele_stk_teardown();
@@ -52,22 +47,21 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	memset(pixels, 0, total);
-
 	last = skele_time_ns();
 
 	while (running) {
+		stk_poll();
 		if (!skele_input_poll())
 			break;
 
-		stk_poll();
-
 		now = skele_time_ns();
 		elapsed = now - last;
+		accum += elapsed;
+		last = now;
 
-		if (elapsed >= skele_tick_ns) {
+		while (accum >= skele_tick_ns) {
 			skele_tick();
-			last = now;
+			accum -= skele_tick_ns;
 		}
 
 		skele_video_blit(pixels);

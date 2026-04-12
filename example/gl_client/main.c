@@ -13,9 +13,7 @@ static void on_signal(void) { running = 0; }
 int main(int argc, char *argv[])
 {
 	skele_video_config_t video_cfg;
-	uint64_t last;
-	uint64_t now;
-	uint64_t elapsed;
+	uint64_t last, now, elapsed, accum = 0;
 
 	skele_clock_init(on_signal);
 
@@ -49,10 +47,12 @@ int main(int argc, char *argv[])
 
 		now = skele_time_ns();
 		elapsed = now - last;
+		accum += elapsed;
+		last = now;
 
-		if (elapsed >= skele_tick_ns) {
+		while (accum >= skele_tick_ns) {
 			skele_tick();
-			last = now;
+			accum -= skele_tick_ns;
 		}
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
