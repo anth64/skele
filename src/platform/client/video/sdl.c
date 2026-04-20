@@ -4,13 +4,15 @@
 #include "skele.h"
 #include <SDL3/SDL.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stk/stk_log.h>
 #include <string.h>
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static SDL_Texture *texture = NULL;
-static SDL_Palette *sdl_pal = NULL;
+static uint32_t palette[SKELE_PALETTE_COLORS];
+static uint32_t *rgba_buf = NULL;
 static uint16_t vid_w = 0;
 static uint16_t vid_h = 0;
 static uint32_t vid_total = 0;
@@ -72,6 +74,7 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 	SDL_WindowFlags flags = 0;
 	const SDL_DisplayMode *mode;
 	uint16_t window_w, window_h, aw, ah;
+	uint16_t i;
 
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
 		stk_log(STK_LOG_ERROR, "video: SDL_Init failed: %s",
@@ -120,11 +123,26 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 		window_h = vid_h * cur_scale;
 	}
 
+	/* default palette: all black */
+	memset(palette, 0, sizeof(palette));
+	for (i = 0; i < SKELE_PALETTE_COLORS; i++)
+		palette[i] = 0xFF000000;
+
+	rgba_buf = malloc(vid_total * sizeof(uint32_t));
+	if (!rgba_buf) {
+		stk_log(STK_LOG_ERROR, "video: out of memory");
+		SDL_Quit();
+		return SKELE_INIT_FAILURE;
+	}
+	memset(rgba_buf, 0, vid_total * sizeof(uint32_t));
+
 	window = SDL_CreateWindow("skele", window_w, window_h,
 				  flags | SDL_WINDOW_HIDDEN);
 	if (!window) {
 		stk_log(STK_LOG_ERROR, "video: SDL_CreateWindow failed: %s",
 			SDL_GetError());
+		free(rgba_buf);
+		rgba_buf = NULL;
 		SDL_Quit();
 		return SKELE_INIT_FAILURE;
 	}
@@ -139,41 +157,25 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 	if (!renderer) {
 		stk_log(STK_LOG_ERROR, "video: SDL_CreateRenderer failed: %s",
 			SDL_GetError());
+		free(rgba_buf);
+		rgba_buf = NULL;
 		SDL_DestroyWindow(window);
 		SDL_Quit();
 		return SKELE_INIT_FAILURE;
 	}
 
-	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_INDEX8,
+	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888,
 				    SDL_TEXTUREACCESS_STREAMING, vid_w, vid_h);
 	if (!texture) {
 		stk_log(STK_LOG_ERROR, "video: SDL_CreateTexture failed: %s",
 			SDL_GetError());
+		free(rgba_buf);
+		rgba_buf = NULL;
 		SDL_DestroyRenderer(renderer);
 		SDL_DestroyWindow(window);
 		SDL_Quit();
 		return SKELE_INIT_FAILURE;
 	}
-
-	sdl_pal = SDL_CreatePalette(SKELE_PALETTE_COLORS);
-	if (!sdl_pal) {
-		stk_log(STK_LOG_ERROR, "video: SDL_CreatePalette failed: %s",
-			SDL_GetError());
-		SDL_DestroyTexture(texture);
-		SDL_DestroyRenderer(renderer);
-		SDL_DestroyWindow(window);
-		SDL_Quit();
-		return SKELE_INIT_FAILURE;
-	}
-
-	SDL_SetTexturePalette(texture, sdl_pal);
-
-	SDL_Color black[SKELE_PALETTE_COLORS];
-	uint16_t i;
-	memset(black, 0, sizeof(black));
-	for (i = 0; i < SKELE_PALETTE_COLORS; i++)
-		black[i].a = 255;
-	SDL_SetPaletteColors(sdl_pal, black, 0, SKELE_PALETTE_COLORS);
 
 	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
 	SDL_SetRenderVSync(renderer, 1);
@@ -183,19 +185,23 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 
 void skele_video_shutdown(void)
 {
-	if (sdl_pal)
-		SDL_DestroyPalette(sdl_pal);
-	if (texture)
+	if (rgba_buf) {
+		free(rgba_buf);
+		rgba_buf = NULL;
+	}
+	if (texture) {
 		SDL_DestroyTexture(texture);
-	if (renderer)
+		texture = NULL;
+	}
+	if (renderer) {
 		SDL_DestroyRenderer(renderer);
-	if (window)
+		renderer = NULL;
+	}
+	if (window) {
 		SDL_DestroyWindow(window);
+		window = NULL;
+	}
 	SDL_Quit();
-	sdl_pal = NULL;
-	texture = NULL;
-	renderer = NULL;
-	window = NULL;
 	vid_w = 0;
 	vid_h = 0;
 	vid_total = 0;
@@ -213,39 +219,29 @@ void skele_video_set_mouse_grab(uint8_t grab)
 	SDL_SetWindowRelativeMouseMode(window, grab ? true : false);
 }
 
+void skele_video_set_title(const char *title)
+{
+	SDL_SetWindowTitle(window, title);
+}
+
 void skele_palette_set(skele_palette_t pal)
 {
-	SDL_Color colors[SKELE_PALETTE_COLORS];
 	uint16_t i;
-	uint32_t c;
-
-	for (i = 0; i < SKELE_PALETTE_COLORS; i++) {
-		c = pal[i];
-		colors[i].r = (uint8_t)(c >> 16);
-		colors[i].g = (uint8_t)(c >> 8);
-		colors[i].b = (uint8_t)(c);
-		colors[i].a = 255;
-	}
-	SDL_SetPaletteColors(sdl_pal, colors, 0, SKELE_PALETTE_COLORS);
+	for (i = 0; i < SKELE_PALETTE_COLORS; i++)
+		palette[i] = pal[i] | 0xFF000000;
 }
 
 void skele_palette_set_index(uint8_t index, uint32_t color)
 {
-	SDL_Color c;
-	c.r = (uint8_t)(color >> 16);
-	c.g = (uint8_t)(color >> 8);
-	c.b = (uint8_t)(color);
-	c.a = 255;
-	SDL_SetPaletteColors(sdl_pal, &c, index, 1);
+	palette[index] = color | 0xFF000000;
 }
 
 void skele_video_blit(uint8_t *pixels)
 {
-	SDL_UpdateTexture(texture, NULL, pixels, vid_w);
+	uint32_t i;
+	for (i = 0; i < vid_total; i++)
+		rgba_buf[i] = palette[pixels[i]];
+	SDL_UpdateTexture(texture, NULL, rgba_buf,
+			  vid_w * (int)sizeof(uint32_t));
 	SDL_RenderTexture(renderer, texture, NULL, NULL);
-}
-
-void skele_video_set_title(const char *title)
-{
-	SDL_SetWindowTitle(window, title);
 }
