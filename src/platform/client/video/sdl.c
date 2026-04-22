@@ -17,7 +17,9 @@ static uint16_t vid_w = 0;
 static uint16_t vid_h = 0;
 static uint32_t vid_total = 0;
 static uint8_t cur_scale = 1;
-static uint8_t fullscreen = 0;
+static uint8_t is_fullscreen = 0;
+static skele_fullscreen_kind_t last_fullscreen_kind =
+    SKELE_FULLSCREEN_EXCLUSIVE;
 
 static uint8_t max_scale(uint16_t rw, uint16_t rh)
 {
@@ -51,16 +53,23 @@ static void set_scale(uint8_t scale)
 			      SDL_WINDOWPOS_CENTERED_DISPLAY(display));
 }
 
-static void toggle_fullscreen(void)
+static void apply_fullscreen_kind(skele_fullscreen_kind_t kind)
 {
-	fullscreen = !fullscreen;
-	SDL_SetWindowFullscreen(window, fullscreen);
+	if (kind == SKELE_FULLSCREEN_EXCLUSIVE) {
+		SDL_DisplayID display;
+		const SDL_DisplayMode *mode;
+		display = SDL_GetDisplayForWindow(window);
+		mode = SDL_GetCurrentDisplayMode(display);
+		SDL_SetWindowFullscreenMode(window, mode);
+	} else {
+		SDL_SetWindowFullscreenMode(window, NULL);
+	}
 }
 
 static void cycle_scale(void)
 {
 	uint8_t next;
-	if (fullscreen)
+	if (is_fullscreen)
 		return;
 	next = cur_scale + 1;
 	if (next > max_scale(vid_w, vid_h))
@@ -74,7 +83,6 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 	SDL_WindowFlags flags = 0;
 	const SDL_DisplayMode *mode;
 	uint16_t window_w, window_h, aw, ah;
-	uint16_t i;
 
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
 		stk_log(STK_LOG_ERROR, "video: SDL_Init failed: %s",
@@ -90,6 +98,11 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 		flags |= SDL_WINDOW_RESIZABLE;
 	if (cfg.flags & SKELE_VIDEO_HIGHDPI)
 		flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+
+	if (cfg.flags & SKELE_VIDEO_FULLSCREEN_EXCLUSIVE)
+		last_fullscreen_kind = SKELE_FULLSCREEN_EXCLUSIVE;
+	else
+		last_fullscreen_kind = SKELE_FULLSCREEN_BORDERLESS;
 
 	display = SDL_GetPrimaryDisplay();
 	vid_w =
@@ -123,11 +136,6 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 		window_h = vid_h * cur_scale;
 	}
 
-	/* default palette: all black */
-	memset(palette, 0, sizeof(palette));
-	for (i = 0; i < SKELE_PALETTE_COLORS; i++)
-		palette[i] = 0xFF000000;
-
 	rgba_buf = malloc(vid_total * sizeof(uint32_t));
 	if (!rgba_buf) {
 		stk_log(STK_LOG_ERROR, "video: out of memory");
@@ -150,8 +158,10 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED_DISPLAY(display),
 			      SDL_WINDOWPOS_CENTERED_DISPLAY(display));
 
-	if (cfg.flags & SKELE_VIDEO_FULLSCREEN)
-		fullscreen = 1;
+	if (cfg.flags & SKELE_VIDEO_FULLSCREEN) {
+		apply_fullscreen_kind(last_fullscreen_kind);
+		is_fullscreen = 1;
+	}
 
 	renderer = SDL_CreateRenderer(window, NULL);
 	if (!renderer) {
@@ -179,6 +189,7 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 
 	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
 	SDL_SetRenderVSync(renderer, 1);
+	memset(palette, 0, sizeof(palette));
 	SDL_ShowWindow(window);
 	return SKELE_INIT_SUCCESS;
 }
@@ -206,12 +217,40 @@ void skele_video_shutdown(void)
 	vid_h = 0;
 	vid_total = 0;
 	cur_scale = 1;
-	fullscreen = 0;
+	is_fullscreen = 0;
+}
+
+void skele_video_blit(uint8_t *pixels)
+{
+	uint32_t i;
+	for (i = 0; i < vid_total; i++)
+		rgba_buf[i] = palette[pixels[i]];
+	SDL_UpdateTexture(texture, NULL, rgba_buf,
+			  vid_w * (int)sizeof(uint32_t));
+	SDL_RenderTexture(renderer, texture, NULL, NULL);
 }
 
 void skele_video_present(void) { SDL_RenderPresent(renderer); }
-void skele_video_toggle_fullscreen(void) { toggle_fullscreen(); }
 void skele_video_cycle_scale(void) { cycle_scale(); }
+
+void skele_video_toggle_fullscreen(void)
+{
+	if (is_fullscreen) {
+		SDL_SetWindowFullscreen(window, false);
+		is_fullscreen = 0;
+	} else {
+		apply_fullscreen_kind(last_fullscreen_kind);
+		SDL_SetWindowFullscreen(window, true);
+		is_fullscreen = 1;
+	}
+}
+
+void skele_video_set_fullscreen_kind(skele_fullscreen_kind_t kind)
+{
+	last_fullscreen_kind = kind;
+	if (is_fullscreen)
+		apply_fullscreen_kind(kind);
+}
 
 void skele_video_set_mouse_grab(uint8_t grab)
 {
@@ -234,14 +273,4 @@ void skele_palette_set(skele_palette_t pal)
 void skele_palette_set_index(uint8_t index, uint32_t color)
 {
 	palette[index] = color | 0xFF000000;
-}
-
-void skele_video_blit(uint8_t *pixels)
-{
-	uint32_t i;
-	for (i = 0; i < vid_total; i++)
-		rgba_buf[i] = palette[pixels[i]];
-	SDL_UpdateTexture(texture, NULL, rgba_buf,
-			  vid_w * (int)sizeof(uint32_t));
-	SDL_RenderTexture(renderer, texture, NULL, NULL);
 }

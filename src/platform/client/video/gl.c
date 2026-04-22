@@ -8,7 +8,9 @@ static SDL_GLContext gl_ctx = NULL;
 static uint16_t vid_w = 0;
 static uint16_t vid_h = 0;
 static uint8_t cur_scale = 1;
-static uint8_t fullscreen = 0;
+static uint8_t is_fullscreen = 0;
+static skele_fullscreen_kind_t last_fullscreen_kind =
+    SKELE_FULLSCREEN_EXCLUSIVE;
 
 static uint8_t max_scale(uint16_t rw, uint16_t rh)
 {
@@ -42,16 +44,23 @@ static void set_scale(uint8_t scale)
 			      SDL_WINDOWPOS_CENTERED_DISPLAY(display));
 }
 
-static void toggle_fullscreen(void)
+static void apply_fullscreen_kind(skele_fullscreen_kind_t kind)
 {
-	fullscreen = !fullscreen;
-	SDL_SetWindowFullscreen(window, fullscreen);
+	if (kind == SKELE_FULLSCREEN_EXCLUSIVE) {
+		SDL_DisplayID display;
+		const SDL_DisplayMode *mode;
+		display = SDL_GetDisplayForWindow(window);
+		mode = SDL_GetCurrentDisplayMode(display);
+		SDL_SetWindowFullscreenMode(window, mode);
+	} else {
+		SDL_SetWindowFullscreenMode(window, NULL);
+	}
 }
 
 static void cycle_scale(void)
 {
 	uint8_t next;
-	if (fullscreen)
+	if (is_fullscreen)
 		return;
 	next = cur_scale + 1;
 	if (next > max_scale(vid_w, vid_h))
@@ -87,6 +96,11 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 		flags |= SDL_WINDOW_RESIZABLE;
 	if (cfg.flags & SKELE_VIDEO_HIGHDPI)
 		flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+
+	if (cfg.flags & SKELE_VIDEO_FULLSCREEN_EXCLUSIVE)
+		last_fullscreen_kind = SKELE_FULLSCREEN_EXCLUSIVE;
+	else
+		last_fullscreen_kind = SKELE_FULLSCREEN_BORDERLESS;
 
 	display = SDL_GetPrimaryDisplay();
 	vid_w =
@@ -131,8 +145,10 @@ uint8_t skele_video_init(skele_video_config_t cfg)
 	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED_DISPLAY(display),
 			      SDL_WINDOWPOS_CENTERED_DISPLAY(display));
 
-	if (cfg.flags & SKELE_VIDEO_FULLSCREEN)
-		fullscreen = 1;
+	if (cfg.flags & SKELE_VIDEO_FULLSCREEN) {
+		apply_fullscreen_kind(last_fullscreen_kind);
+		is_fullscreen = 1;
+	}
 
 	gl_ctx = SDL_GL_CreateContext(window);
 	if (!gl_ctx) {
@@ -160,12 +176,30 @@ void skele_video_shutdown(void)
 	vid_w = 0;
 	vid_h = 0;
 	cur_scale = 1;
-	fullscreen = 0;
+	is_fullscreen = 0;
 }
 
 void skele_video_present(void) { SDL_GL_SwapWindow(window); }
-void skele_video_toggle_fullscreen(void) { toggle_fullscreen(); }
 void skele_video_cycle_scale(void) { cycle_scale(); }
+
+void skele_video_toggle_fullscreen(void)
+{
+	if (is_fullscreen) {
+		SDL_SetWindowFullscreen(window, false);
+		is_fullscreen = 0;
+	} else {
+		apply_fullscreen_kind(last_fullscreen_kind);
+		SDL_SetWindowFullscreen(window, true);
+		is_fullscreen = 1;
+	}
+}
+
+void skele_video_set_fullscreen_kind(skele_fullscreen_kind_t kind)
+{
+	last_fullscreen_kind = kind;
+	if (is_fullscreen)
+		apply_fullscreen_kind(kind);
+}
 
 void skele_video_set_mouse_grab(uint8_t grab)
 {

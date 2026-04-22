@@ -11,9 +11,15 @@ extern "C" {
 #define SKELE_VIDEO_BORDERLESS 0x02
 #define SKELE_VIDEO_RESIZABLE 0x04
 #define SKELE_VIDEO_HIGHDPI 0x08
+#define SKELE_VIDEO_FULLSCREEN_EXCLUSIVE 0x10
 
 #define SKELE_DEFAULT_RENDER_WIDTH 320
 #define SKELE_DEFAULT_RENDER_HEIGHT 200
+
+typedef enum {
+	SKELE_FULLSCREEN_BORDERLESS,
+	SKELE_FULLSCREEN_EXCLUSIVE
+} skele_fullscreen_kind_t;
 
 typedef struct {
 	uint16_t render_width;
@@ -28,6 +34,7 @@ void skele_video_shutdown(void);
 void skele_video_present(void);
 void skele_video_set_title(const char *title);
 void skele_video_toggle_fullscreen(void);
+void skele_video_set_fullscreen_kind(skele_fullscreen_kind_t kind);
 void skele_video_cycle_scale(void);
 void skele_video_set_mouse_grab(uint8_t grab);
 
