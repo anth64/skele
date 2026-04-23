@@ -111,6 +111,15 @@ typedef enum {
 	SKELE_PAD_AXIS_COUNT
 } skele_pad_axis_t;
 
+typedef enum {
+	SKELE_MOUSE_LEFT,
+	SKELE_MOUSE_RIGHT,
+	SKELE_MOUSE_MIDDLE,
+	SKELE_MOUSE_X1,
+	SKELE_MOUSE_X2,
+	SKELE_MOUSE_BUTTON_COUNT
+} skele_mouse_button_t;
+
 #define SKELE_MAX_PADS 4
 
 uint8_t skele_input_poll(void);
@@ -124,6 +133,8 @@ uint8_t skele_pad_button_held(uint8_t pad, skele_pad_button_t btn);
 float skele_pad_axis(uint8_t pad, skele_pad_axis_t axis);
 
 void skele_mouse_delta(int32_t *dx, int32_t *dy);
+uint8_t skele_mouse_button_down(skele_mouse_button_t btn);
+uint8_t skele_mouse_button_held(skele_mouse_button_t btn);
 
 #ifdef __cplusplus
 }

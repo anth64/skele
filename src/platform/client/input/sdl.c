@@ -11,6 +11,8 @@ static uint8_t pad_btn_held[SKELE_MAX_PADS][SKELE_PAD_BUTTON_COUNT];
 static uint8_t pad_btn_down[SKELE_MAX_PADS][SKELE_PAD_BUTTON_COUNT];
 static float pad_axes[SKELE_MAX_PADS][SKELE_PAD_AXIS_COUNT];
 
+static uint8_t mouse_btn_held[SKELE_MOUSE_BUTTON_COUNT];
+static uint8_t mouse_btn_down[SKELE_MOUSE_BUTTON_COUNT];
 static int32_t mouse_dx = 0;
 static int32_t mouse_dy = 0;
 
@@ -184,6 +186,24 @@ static skele_pad_button_t sdl_btn_to_pad(SDL_GamepadButton btn)
 	}
 }
 
+static skele_mouse_button_t sdl_btn_to_mouse(uint8_t sdl_btn)
+{
+	switch (sdl_btn) {
+	case SDL_BUTTON_LEFT:
+		return SKELE_MOUSE_LEFT;
+	case SDL_BUTTON_RIGHT:
+		return SKELE_MOUSE_RIGHT;
+	case SDL_BUTTON_MIDDLE:
+		return SKELE_MOUSE_MIDDLE;
+	case SDL_BUTTON_X1:
+		return SKELE_MOUSE_X1;
+	case SDL_BUTTON_X2:
+		return SKELE_MOUSE_X2;
+	default:
+		return SKELE_MOUSE_BUTTON_COUNT;
+	}
+}
+
 static int8_t pad_slot(SDL_JoystickID id)
 {
 	uint8_t i;
@@ -227,9 +247,11 @@ uint8_t skele_input_poll(void)
 	int8_t slot;
 	uint8_t i;
 	skele_pad_button_t btn;
+	skele_mouse_button_t mbtn;
 
 	memset(key_down, 0, sizeof(key_down));
 	memset(pad_btn_down, 0, sizeof(pad_btn_down));
+	memset(mouse_btn_down, 0, sizeof(mouse_btn_down));
 	mouse_dx = 0;
 	mouse_dy = 0;
 
@@ -241,6 +263,20 @@ uint8_t skele_input_poll(void)
 		case SDL_EVENT_MOUSE_MOTION:
 			mouse_dx += (int32_t)e.motion.xrel;
 			mouse_dy += (int32_t)e.motion.yrel;
+			break;
+
+		case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			mbtn = sdl_btn_to_mouse(e.button.button);
+			if (mbtn != SKELE_MOUSE_BUTTON_COUNT) {
+				mouse_btn_down[mbtn] = 1;
+				mouse_btn_held[mbtn] = 1;
+			}
+			break;
+
+		case SDL_EVENT_MOUSE_BUTTON_UP:
+			mbtn = sdl_btn_to_mouse(e.button.button);
+			if (mbtn != SKELE_MOUSE_BUTTON_COUNT)
+				mouse_btn_held[mbtn] = 0;
 			break;
 
 		case SDL_EVENT_KEY_DOWN:
@@ -363,4 +399,14 @@ void skele_mouse_delta(int32_t *dx, int32_t *dy)
 		*dx = mouse_dx;
 	if (dy)
 		*dy = mouse_dy;
+}
+
+uint8_t skele_mouse_button_down(skele_mouse_button_t btn)
+{
+	return btn < SKELE_MOUSE_BUTTON_COUNT ? mouse_btn_down[btn] : 0;
+}
+
+uint8_t skele_mouse_button_held(skele_mouse_button_t btn)
+{
+	return btn < SKELE_MOUSE_BUTTON_COUNT ? mouse_btn_held[btn] : 0;
 }
